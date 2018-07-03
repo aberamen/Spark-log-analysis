@@ -37,24 +37,30 @@ object LogAnalyseFuns {
    */
 
 
-  def getResponseCodesAndFrequencies(data: RDD[ApacheLogInfos]): List[(Int, Int)] = ???
+  def getResponseCodesAndFrequencies(data: RDD[ApacheLogInfos]): List[(Int, Int)] = {
+    data.map(f => (f.getResponseCode, 1)).reduceByKey((x, y) => x + y).collect().toList
+  }
 
   /* 
    * Calculate for each single response code the number of occurences
    * Return a list of tuples which contain the response code as the first
    * element and the number of occurences as the second.
-   *    *   
+   *
    */
 
 
-  def get20HostsAccessedMoreThan10Times(data: RDD[Row]): List[String] = ???
+  def get20HostsAccessedMoreThan10Times(data: RDD[ApacheLogInfos]): List[String] = {
+    data.map(f => (f.getHostname, 1)).reduceByKey((x, y) => x + y).filter(x => x._2 > 10).keys.distinct().take(20).toList
+  }
 
   /* 
    * Calculate 20 abitrary hosts from which the web server was accessed more than 10 times 
    * Print out the result on the console (no tests take place)
    */
 
-  def getTopTenEndpoints(data: RDD[Row]): List[(String, Int)] = ???
+  def getTopTenEndpoints(data: RDD[ApacheLogInfos]): List[(String, Int)] = {
+    data.map(f => (f.getRequestEndpoint, 1)).reduceByKey((x, y) => x + y).collect().toList.sortBy(_._2)(Ordering[Int].reverse).take(10)
+  }
 
   /* 
    * Calcuclate the top ten endpoints. 
@@ -63,7 +69,16 @@ object LogAnalyseFuns {
    * The list should be ordered by the number of accesses.
    */
 
-  def getTopTenErrorEndpoints(data: RDD[Row]): List[(String, Int)] = ???
+  def getTopTenErrorEndpoints(data: RDD[ApacheLogInfos]): List[(String, Int)] = {
+    data.filter(x => x.getResponseCode != 200)
+      .groupBy(x => x.getRequestEndpoint)
+      .map(x => (x._1, x._2.count(c => true)))
+      .collect()
+      .toList
+      .sortBy(_._2)(Ordering[Int].reverse)
+      .take(10)
+
+  }
 
   /* 
    * Calculate the top ten endpoint that produces error response codes (response code != 200).

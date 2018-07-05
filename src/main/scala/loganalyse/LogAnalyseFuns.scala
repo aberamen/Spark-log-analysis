@@ -2,6 +2,8 @@ package loganalyse
 
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.Row
+import java.time.format.TextStyle
+import java.util.Locale
 
 
 object LogAnalyseFuns {
@@ -73,9 +75,10 @@ object LogAnalyseFuns {
     data.filter(x => x.getResponseCode != 200)
       .groupBy(x => x.getRequestEndpoint)
       .map(x => (x._1, x._2.count(c => true)))
+      .sortBy(x => x._2, ascending = false)
       .collect()
       .toList
-      .sortBy(_._2)(Ordering[Int].reverse)
+     // .sortBy(_._2)(Ordering[Int].reverse)
       .take(10)
 
   }
@@ -88,7 +91,13 @@ object LogAnalyseFuns {
    * The list should be ordered by the number of accesses.
    */
 
-  def getNumberOfRequestsPerDay(data: RDD[ApacheLogInfos]): List[(Int, Int)] = ???
+  def getNumberOfRequestsPerDay(data: RDD[ApacheLogInfos]): List[(Int, Int)] = {
+    data.groupBy(f => f.getDatetime.getDayOfMonth)
+      .map(x => (x._1, x._2.count(c => true)))
+      .sortBy(x => x._1, ascending = true)
+      .collect()
+      .toList
+  }
 
   /* 
    * Calculate the number of requests per day.
@@ -97,14 +106,22 @@ object LogAnalyseFuns {
    * The list should be ordered by the day number.
    */
 
-  def numberOfUniqueHosts(data: RDD[Row]): Long = ???
+  def numberOfUniqueHosts(data: RDD[ApacheLogInfos]): Long = {
+    data.groupBy(x => x.getHostname).distinct().count()
+  }
 
   /* 
    * Calculate the number of hosts that accesses the web server in June 95.
    * Every hosts should only be counted once.
    */
 
-  def numberOfUniqueDailyHosts(data: RDD[Row]): List[(Int, Int)] = ???
+  def numberOfUniqueDailyHosts(data: RDD[ApacheLogInfos]): List[(Int, Int)] = {
+    data.groupBy(f => f.getDatetime.getDayOfMonth)
+      .map(x => (x._1, x._2.map(n => n.getHostname).toList.distinct.count(c => true)))
+      .sortBy(x => x._1, ascending = true)
+      .collect()
+      .toList
+  }
 
   /* 
    * Calculate the number of hosts per day that accesses the web server.
@@ -112,21 +129,39 @@ object LogAnalyseFuns {
    * Order the list by the day number.
    */
 
-  def averageNrOfDailyRequestsPerHost(data: RDD[ApacheLogInfos]): List[(Int, Int)] = ???
+  def averageNrOfDailyRequestsPerHost(data: RDD[ApacheLogInfos]): List[(Int, Int)] = {
+    data.groupBy(f => f.getDatetime.getDayOfMonth)
+      .map(x => (x._1, x._2.size / x._2.map(n => n.getHostname).toList.distinct.count(c => true)))
+      .sortBy(x => x._1, ascending = true)
+      .collect()
+      .toList
+  }
 
   /*
    * Calculate the average number of requests per host for each single day.
    * Order the list by the day number.
    */
 
-  def top25ErrorCodeResponseHosts(data: RDD[Row]): Set[(String, Int)] = ???
+  def top25ErrorCodeResponseHosts(data: RDD[ApacheLogInfos]): Set[(String, Int)] = {
+    data.groupBy(f => f.getHostname)
+      .mapValues(x => x.filter(x => x.getResponseCode == 404).size)
+      .sortBy(x => x._2, ascending = false)
+      .take(25)
+      .toSet
+  }
 
   /*
    * Calculate the top 25 hosts that causes error codes (Response Code=404)
    * Return a set of tuples consisting the hostnames  and the number of requests
    */
 
-  def responseErrorCodesPerDay(data: RDD[ApacheLogInfos]): List[(Int, Int)] = ???
+  def responseErrorCodesPerDay(data: RDD[ApacheLogInfos]): List[(Int, Int)] = {
+    data.groupBy(f => f.getDatetime.getDayOfMonth)
+      .mapValues(x => x.filter(x => x.getResponseCode == 404).size)
+      .sortBy(x => x._1, ascending = true)
+      .collect()
+      .toList
+  }
 
   /*
    * Calculate the number of error codes (Response Code=404) per day.
@@ -134,7 +169,13 @@ object LogAnalyseFuns {
    * Order the list by the day number.
    */
 
-  def errorResponseCodeByHour(data: RDD[Row]): List[(Int, Int)] = ???
+  def errorResponseCodeByHour(data: RDD[ApacheLogInfos]): List[(Int, Int)] = {
+    data.groupBy(f => f.getDatetime.getHour)
+      .mapValues(x => x.filter(x => x.getResponseCode == 404).size)
+      .sortBy(x => x._1, ascending = true)
+      .collect()
+      .toList
+  }
 
   /*
    * Calculate the error response coded for every hour of the day.
@@ -144,7 +185,25 @@ object LogAnalyseFuns {
    */
 
 
-  def getAvgRequestsPerWeekDay(data: RDD[ApacheLogInfos]): List[(Int, String)] = ???
+  def getAvgRequestsPerWeekDay(data: RDD[ApacheLogInfos]): List[(Int, String)] = {
+    data.groupBy(f => f.getDatetime.getDayOfWeek.getValue)
+      .mapValues(x => x.size / x.map(_.getDatetime.toLocalDate).toList.distinct.size)
+      .map(x => (x._2, x._1))
+      .sortBy(x => x._2, ascending = true)
+      .mapValues{
+        x => x  match {
+          case 1 => "Monday"
+          case 2 => "Tuesday"
+          case 3 => "Wednesday"
+          case 4 => "Thursday"
+          case 5 => "Friday"
+          case 6 => "Saturday"
+          case 7 => "Sunday"
+        }
+      }
+      .collect()
+      .toList
+  }
 
   /*
    * Calculate the number of requests per weekday (Monday, Tuesday,...).
